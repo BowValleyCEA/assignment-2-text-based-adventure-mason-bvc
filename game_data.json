@@ -1,0 +1,5 @@
+{
+  "GameName": "Assignment 2",
+  "Description": "Some game description for Assignment 2",
+  "Rooms":  [{"Name":"Living Room","Reference":"living_room","Description":"Place where people live, I guess."}, {"Name":"Dining Room","Reference":"dining_room","Description":"A dining for rooms"}]
+}
