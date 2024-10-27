@@ -1,0 +1,15 @@
+{
+    "root": {
+        "initial": "You appear in a lavish room, adorned with red and purple. To your left is a small corridor; to your right is the entrance to the Great Hall.",
+        "transitions": {
+            "left": "corridor0",
+            "right": "greatHall"
+        }
+    },
+    "corridor0": {
+        "initial": "You venture down the corridor. Its end is guarded by a portcullis.",
+        "transitions": {
+            "back": "corridor0"
+        }
+    }
+}
