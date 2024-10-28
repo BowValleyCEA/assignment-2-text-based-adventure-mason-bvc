@@ -1,55 +1,80 @@
 using System.Text.RegularExpressions;
+using TextAdventure;
 
-Scene? startingRoom = null;
-Scene? corridor0 = null;
-
-startingRoom = new Scene()
+Dictionary<string, Scene> scenes = new()
 {
-    Name = "Lavish Room",
-    InitialText = "You appear in a lavish room, adorned with red and purple. To the west is a small corridor, to your east is the entrance to the Great Hall.",
-    Links = new()
+    ["StartingRoom"] = new()
     {
-        ["west"] = corridor0,
-    },
-};
-
-corridor0 = new Scene()
-{
-    Name = "Corridor",
-    InitialText = "You venture down the corridor. Its end is guarded by a portcullis.",
-    Links = new()
-    {
-        ["east"] = startingRoom,
-    },
-    Things = new()
-    {
-        ["portcullis"] = new()
+        Name = "Lavish Room",
+        InitialText = "You appear in a lavish room, adorned with red and purple. To the west is a small corridor, to your east is the entrance to the Great Hall.",
+        Links = new()
         {
-            Name = "Portcullis",
-            InteractWith = (_) =>
+            ["west"] = "Corridor0",
+        },
+    },
+    ["Corridor0"] = new()
+    {
+        Name = "Corridor",
+        InitialText = "You venture down the corridor. Its end is guarded by a portcullis.",
+        Links = new()
+        {
+            ["east"] = "StartingRoom",
+        },
+        Things = new()
+        {
+            ["portcullis"] = new()
             {
-                Console.WriteLine("The portcullis is shut. You try prying it open from the bottom, but it's no use.");
+                Name = "Portcullis",
+                InteractWith = (_) =>
+                {
+                    Console.WriteLine("The portcullis is shut. You try prying it open from the bottom, but it's no use.");
+                },
             },
         },
     },
 };
 
-Scene currentScene = startingRoom;
+Scene currentScene = scenes["StartingRoom"];
 
-Dictionary<string, Action<string>> actions = new()
+Dictionary<string, Action<MatchCollection>> actions = new()
 {
-    ["go"] = (string where) =>
+    ["go"] = (MatchCollection args) =>
     {
-        if (currentScene.Links.TryGetValue(where, out Scene? value) && value is not null)
+        if (args.Count < 2)
         {
-            currentScene = value;
+            Console.WriteLine("Where should I go?");
+            return;
+        }
+
+        if (currentScene.Links.TryGetValue(args[1].Value, out string? arg) && arg is not null)
+        {
+            currentScene = scenes[currentScene.Links[args[1].Value]];
+
+            string text = currentScene.InitialText;
+
+            if (currentScene.WasVisited)
+            {
+                text = currentScene.Name;
+            }
+
+            Console.WriteLine(text);
+
+            return;
+        }
+    },
+    ["inspect"] = (MatchCollection args) =>
+    {
+        if (currentScene.Things.TryGetValue(args[1].Value, out Thing? thing) && thing is not null)
+        {
+            thing.InteractWith?.Invoke(thing);
         }
     },
 };
 
+Console.WriteLine(currentScene.InitialText);
+
 while (true)
 {
-    Console.WriteLine(currentScene.InitialText);
     Console.Write("> ");
 
     string? input = Console.ReadLine();
@@ -59,37 +84,13 @@ while (true)
         continue;
     }
 
-    Match match = Regexes.Go().Match(input);
+    MatchCollection? matches = Regexes.Command().Matches(input);
 
-    if (!match.Success)
+    if (actions.TryGetValue(matches[0].Value, out Action<MatchCollection>? action) && action is not null)
     {
-        Console.WriteLine("Come again?");
+        actions[matches[0].Value]?.Invoke(matches);
         continue;
     }
 
-    // actions[match.Captures[1].Value]?.Invoke(match.Captures[2].Value);
-    foreach (var capture in match.Captures)
-    {
-        Console.WriteLine(capture);
-    }
-}
-
-class Scene
-{
-    public required string Name;
-    public required string InitialText;
-    public Dictionary<string, Scene?> Links = [];
-    public Dictionary<string, Thing?> Things = [];
-}
-
-record class Thing
-{
-    public required string Name;
-    public Action<Thing>? InteractWith;
-}
-
-static partial class Regexes
-{
-    [GeneratedRegex(@"(?i)\b(go)\s+(north|east|south|west|back)", RegexOptions.None, "en-CA")]
-    public static partial Regex Go();
+    Console.WriteLine("Come again?");
 }
