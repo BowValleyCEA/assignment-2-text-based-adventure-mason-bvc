@@ -40,27 +40,6 @@ Dictionary<string, Action<MatchCollection>> actions = new()
 {
     ["go"] = (MatchCollection args) =>
     {
-        if (args.Count < 2)
-        {
-            Console.WriteLine("Where should I go?");
-            return;
-        }
-
-        if (currentScene.Links.TryGetValue(args[1].Value, out string? arg) && arg is not null)
-        {
-            currentScene = scenes[currentScene.Links[args[1].Value]];
-
-            string text = currentScene.InitialText;
-
-            if (currentScene.WasVisited)
-            {
-                text = currentScene.Name;
-            }
-
-            Console.WriteLine(text);
-
-            return;
-        }
     },
     ["inspect"] = (MatchCollection args) =>
     {
@@ -84,12 +63,35 @@ while (true)
         continue;
     }
 
-    MatchCollection? matches = Regexes.Command().Matches(input);
+    MatchCollection? commandMatches = Regexes.Command().Matches(input);
 
-    if (actions.TryGetValue(matches[0].Value, out Action<MatchCollection>? action) && action is not null)
+    switch (commandMatches[0].Value)
     {
-        actions[matches[0].Value]?.Invoke(matches);
-        continue;
+    case "go":
+    {
+        Match goMatch = Regexes.Go().Match(input);
+
+        Console.WriteLine(goMatch.Success);/*
+
+        if (currentScene.Links.TryGetValue(goMatches[1].Value, out string? arg) && arg is not null)
+        {
+            currentScene = scenes[currentScene.Links[goMatches[1].Value]];
+
+            string text = currentScene.InitialText;
+
+            if (currentScene.WasVisited)
+            {
+                text = currentScene.Name;
+            }
+
+            Console.WriteLine(text);
+        }*/
+    }
+    break;
+    case "inspect":
+    {
+    }
+    break;
     }
 
     Console.WriteLine("Come again?");
