@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Text.RegularExpressions;
 using Mason.Extensions;
 using TextAdventure;
@@ -105,14 +106,15 @@ Dictionary<string, Scene> scenes = new()
     }
 };
 
-Stack<string> breadcrumbs = [];
+Stack<Scene> breadcrumbs = [];
 Scene currentScene = scenes["StartingRoom"];
 Thing player = new()
 {
     Name = "Player",
 };
 
-Console.WriteLine(currentScene.InitialText);
+GoInto(scenes["StartingRoom"]);
+breadcrumbs.Pop();
 
 while (true)
 {
@@ -127,15 +129,17 @@ while (true)
 
     input = input.Trim().ToLower();
 
+    // go back
+
     if (Regexes.GoBack().IsMatch(input))
     {
-        if (!breadcrumbs.TryPop(out string? linkId) || linkId is null)
+        if (!breadcrumbs.TryPop(out Scene? targetScene))
         {
             Console.WriteLine("There is nowhere to go back to!");
             continue;
         }
 
-        currentScene = scenes[linkId];
+        GoInto(targetScene);
 
         continue;
     }
@@ -146,15 +150,54 @@ while (true)
 
     if (matchAndGroups.Match.Success)
     {
-        foreach (OrderedDictionary link in currentScene.Links)
+        if (matchAndGroups.Groups.Length < 3)
         {
-            Console.WriteLine(link);
+            Console.WriteLine("Where should I go?");
+            continue;
         }
 
+        bool success = false;
+
+        foreach (DictionaryEntry kvp in currentScene.Links)
+        {
+            Regex re = (Regex)kvp.Key;
+            string targetSceneReference = (string)kvp.Value!;
+
+            if (re.IsMatch(matchAndGroups.Groups[^1]) && scenes.TryGetValue(targetSceneReference, out Scene? targetScene))
+            {
+                GoInto(targetScene);
+                success = true;
+                break;
+            }
+        }
+
+        if (success)
+        {
+            continue;
+        }
+
+        Console.WriteLine($"\"{matchAndGroups.Groups[^1]}\" is not a place I can go into.");
         continue;
     }
 
     Console.WriteLine("Come again?");
+}
+
+void GoInto(Scene targetScene)
+{
+    breadcrumbs.Push(currentScene);
+    currentScene = targetScene;
+
+    string text = currentScene.InitialText;
+
+    if (currentScene.WasVisited)
+    {
+        text = currentScene.Name;
+    }
+
+    currentScene.WasVisited = true;
+
+    Console.WriteLine(text);
 }
 
 static (Match Match, string[] Groups) ProcessGroups(Match match)

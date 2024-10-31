@@ -10,7 +10,7 @@ public static partial class Regexes
     public static partial Regex Action();
     [GeneratedRegex(@"inspect(\s+the)?", RegexOptions.IgnoreCase)]
     public static partial Regex Inspect();
-    [GeneratedRegex(@"\b(?:go\s+back)")]
+    [GeneratedRegex(@"\b(?:go\s+back)|\b(back)")]
     public static partial Regex GoBack();
     [GeneratedRegex(@"\b(go)(?:\s+to(?:\s+the)?)?(?:\s+(\w+))?", RegexOptions.IgnoreCase)]
     public static partial Regex Go();
@@ -23,12 +23,12 @@ public static partial class Regexes
 
     // directions
 
-    [GeneratedRegex(@"(n(?:orth)?)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(north|n)", RegexOptions.IgnoreCase)]
     public static partial Regex North();
-    [GeneratedRegex(@"(e(?:ast)?)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(east|e)", RegexOptions.IgnoreCase)]
     public static partial Regex East();
-    [GeneratedRegex(@"(s(?:outh)?)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(south|s)", RegexOptions.IgnoreCase)]
     public static partial Regex South();
-    [GeneratedRegex(@"(w(?:est)?)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(west|w)", RegexOptions.IgnoreCase)]
     public static partial Regex West();
 }
