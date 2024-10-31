@@ -15,7 +15,7 @@ Dictionary<string, Scene> scenes = new()
     ["Corridor0"] = new()
     {
         Name = "Corridor",
-        InitialText = "You venture down the corridor. Its end is guarded by a portcullis.",
+        InitialText = "You venture down the corridor; wooden casks line its flanks and its end is guarded by a portcullis.",
         Links = new()
         {
             ["east"] = "StartingRoom",
@@ -25,29 +25,44 @@ Dictionary<string, Scene> scenes = new()
             ["portcullis"] = new()
             {
                 Name = "Portcullis",
-                InteractWith = (_) =>
+                InteractWith = (_, _) =>
                 {
-                    Console.WriteLine("The portcullis is shut. You try prying it open from the bottom, but it's no use.");
+                    Console.WriteLine("The portcullis is shut. You try prying it open from the bottom, but it's no use. There is a key hole, however.");
+                },
+            },
+            ["casks"] = new()
+            {
+                Name = "Casks",
+                State = new()
+                {
+                    ["IsOpened"] = false,
+                },
+                InteractWith = (Thing self, Thing activator) =>
+                {
+                    // needed to start a new scope because i repeatedly use the
+                    // identifier "value" for out args
+
+                    {if (activator.State.TryGetValue("Inventory", out object? value) && value is Dictionary<string, Thing> inventory && inventory.TryGetValue("Crowbar", out Thing? crowbar))
+                    {
+                        Console.WriteLine("You descend the flanks, prying open the caskets one-by-one with your crowbar. In one of them, you find a key.");
+                        return;
+                    }}
+
+                    Console.WriteLine("You try opening the casks with your bare hands, but they appear to be shut.");
                 },
             },
         },
     },
+    // ["GreatHall"] = new()
+    // {
+        // InitialText = "You now stand in the Great Hall. A sizable room whose walls are adorned with red and purple flags. Long tables ",
+    // },
 };
 
 Scene currentScene = scenes["StartingRoom"];
-
-Dictionary<string, Action<MatchCollection>> actions = new()
+Thing player = new()
 {
-    ["go"] = (MatchCollection args) =>
-    {
-    },
-    ["inspect"] = (MatchCollection args) =>
-    {
-        if (currentScene.Things.TryGetValue(args[1].Value, out Thing? thing) && thing is not null)
-        {
-            thing.InteractWith?.Invoke(thing);
-        }
-    },
+    Name = "Player",
 };
 
 Console.WriteLine(currentScene.InitialText);
@@ -63,36 +78,72 @@ while (true)
         continue;
     }
 
-    MatchCollection? commandMatches = Regexes.Command().Matches(input);
+    input = input.Trim();
 
-    switch (commandMatches[0].Value)
+    // go
+
+    var matchAndGroups = ProcessGroups(Regexes.Go().Match(input));
+
+    if (matchAndGroups.Match.Success)
     {
-    case "go":
-    {
-        Match goMatch = Regexes.Go().Match(input);
-
-        Console.WriteLine(goMatch.Success);/*
-
-        if (currentScene.Links.TryGetValue(goMatches[1].Value, out string? arg) && arg is not null)
+        if (matchAndGroups.Groups.Length < 3)
         {
-            currentScene = scenes[currentScene.Links[goMatches[1].Value]];
+            Console.WriteLine("Where should I go?");
+            continue;
+        }
 
-            string text = currentScene.InitialText;
+        if (!currentScene.Links.TryGetValue(matchAndGroups.Groups[^1].Value, out string? linkString))
+        {
+            Console.WriteLine("I cannot go there.");
+            continue;
+        }
 
-            if (currentScene.WasVisited)
-            {
-                text = currentScene.Name;
-            }
+        currentScene = scenes[linkString];
 
-            Console.WriteLine(text);
-        }*/
+        string text = currentScene.InitialText;
+
+        if (currentScene.WasVisited)
+        {
+            text = currentScene.Name;
+        }
+
+        Console.WriteLine(text);
+
+        continue;
     }
-    break;
-    case "inspect":
+
+    // inspect
+
+    matchAndGroups = ProcessGroups(Regexes.Inspect().Match(input));
+
+    if (matchAndGroups.Match.Success)
     {
-    }
-    break;
+        if (matchAndGroups.Groups.Length < 2)
+        {
+            Console.WriteLine("What should I inspect?");
+            continue;
+        }
+
+        if (!currentScene.Things.TryGetValue(matchAndGroups.Groups[^1].Value, out Thing? thing))
+        {
+            Console.WriteLine($"I can't find such a thing in here.");
+            continue;
+        }
+
+        thing?.InteractWith?.Invoke(thing, player);
+
+        continue;
     }
 
     Console.WriteLine("Come again?");
+}
+
+static (Match Match, Group[] Groups) ProcessGroups(Match match)
+{
+    Group[] groups = new Group[match.Groups.Count];
+
+    match.Groups.CopyTo(groups, 0);
+    groups = groups.Where(g => !string.IsNullOrWhiteSpace(g.Value)).ToArray();
+
+    return (match, groups);
 }

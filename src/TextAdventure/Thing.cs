@@ -3,5 +3,6 @@ namespace TextAdventure;
 public sealed record class Thing
 {
     public required string Name;
-    public Action<Thing>? InteractWith;
+    public Dictionary<string, object?> State = [];
+    public Action<Thing, Thing>? InteractWith;
 }

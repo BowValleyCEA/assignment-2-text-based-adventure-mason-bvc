@@ -4,8 +4,8 @@ namespace TextAdventure;
 
 public static partial class Regexes
 {
-    [GeneratedRegex(@"\w+")]
-    public static partial Regex Command();
-    [GeneratedRegex(@"(go)(?:\s+to\s+the)?\s+(n(?:orth)?|e(?:ast)?|s(?:outh)?|w(?:est)?)")]
+    [GeneratedRegex(@"\b(go)(?:\s+(?:to(?:\s+the)?\s+)?(\w+)?)?", RegexOptions.IgnoreCase)]
     public static partial Regex Go();
+    [GeneratedRegex(@"\b(inspect)(?:\s+the)?\s+(\w+)?", RegexOptions.IgnoreCase)]
+    public static partial Regex Inspect();
 }
