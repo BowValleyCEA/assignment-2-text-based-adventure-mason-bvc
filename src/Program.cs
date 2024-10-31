@@ -53,10 +53,15 @@ Dictionary<string, Scene> scenes = new()
             },
         },
     },
-    // ["GreatHall"] = new()
-    // {
-        // InitialText = "You now stand in the Great Hall. A sizable room whose walls are adorned with red and purple flags. Long tables ",
-    // },
+    ["GreatHall"] = new()
+    {
+        Name = "Great Hall",
+        InitialText = "You now stand in the Great Hall. A sizable room whose walls are lined with red and purple flags and striated by long tables. At the end of the hall to your north, there is a staircase leading to the salle haute.",
+        Links = new()
+        {
+            ["north"] = "SalleHaute",
+        },
+    },
 };
 
 Scene currentScene = scenes["StartingRoom"];
