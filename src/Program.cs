@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Mason.Extensions;
 using TextAdventure;
 
 Dictionary<string, Scene> scenes = new()
@@ -9,7 +10,8 @@ Dictionary<string, Scene> scenes = new()
         InitialText = "You appear in a lavish room, adorned with red and purple. To the west is a small corridor, to your east is the entrance to the Great Hall.",
         Links = new()
         {
-            ["west"] = "Corridor0",
+            [Regexes.East()] = "GreatHall",
+            [Regexes.West()] = "Corridor0",
         },
     },
     ["Corridor0"] = new()
@@ -18,38 +20,44 @@ Dictionary<string, Scene> scenes = new()
         InitialText = "You venture down the corridor; wooden casks line its flanks and its end is guarded by a portcullis.",
         Links = new()
         {
-            ["east"] = "StartingRoom",
+            [Regexes.East()] = "StartingRoom",
         },
         Things = new()
         {
-            ["portcullis"] = new()
+            [new Regex("portcullis", RegexOptions.IgnoreCase)] = new Thing()
             {
                 Name = "Portcullis",
-                InteractWith = (_, _) =>
+                Actions = new()
                 {
-                    Console.WriteLine("The portcullis is shut. You try prying it open from the bottom, but it's no use. There is a key hole, however.");
+                    [Regexes.Inspect()] = (Thing _, Thing _) =>
+                    {
+                        Console.WriteLine("The portcullis is shut. You try prying it open from the bottom, but it's no use. There is a key hole, however.");
+                    },
                 },
             },
-            ["casks"] = new()
+            [new Regex(@"(?:wood(?:en)?\s+)?(cask(?:s)?)", RegexOptions.IgnoreCase)] = new Thing()
             {
                 Name = "Casks",
                 State = new()
                 {
                     ["IsOpened"] = false,
                 },
-                InteractWith = (Thing self, Thing activator) =>
+                Actions = new()
                 {
-                    // needed to start a new scope because i repeatedly use the
-                    // identifier "value" for out args
-
-                    {if (activator.State.TryGetValue("Inventory", out object? value) && value is Dictionary<string, Thing> inventory && inventory.TryGetValue("Crowbar", out Thing? crowbar))
+                    [Regexes.Inspect()] = (Thing self, Thing activator) =>
                     {
-                        Console.WriteLine("You descend the flanks, prying open the caskets one-by-one with your crowbar. In one of them, you find a key.");
-                        return;
-                    }}
+                        // needed to start a new scope because i repeatedly use the
+                        // identifier "value" for out args
 
-                    Console.WriteLine("You try opening the casks with your bare hands, but they appear to be shut.");
-                },
+                        {if (activator.State.TryGetValue("Inventory", out object? value) && value is Dictionary<string, Thing> inventory && inventory.TryGetValue("Crowbar", out Thing? crowbar))
+                        {
+                            Console.WriteLine("You descend the flanks, prying open the caskets one-by-one with your crowbar. In one of them, you find a key.");
+                            return;
+                        }}
+
+                        Console.WriteLine("You try opening the casks with your bare hands, but they appear to be shut.");
+                    },
+                }
             },
         },
     },
@@ -59,11 +67,45 @@ Dictionary<string, Scene> scenes = new()
         InitialText = "You now stand in the Great Hall. A sizable room whose walls are lined with red and purple flags and striated by long tables. At the end of the hall to your north, there is a staircase leading to the salle haute.",
         Links = new()
         {
-            ["north"] = "SalleHaute",
+            [Regexes.North()] = "SalleHaute",
         },
     },
+    ["SalleHaute"] = new()
+    {
+        Name = "Salle Haute",
+        InitialText = "You now stand in the Salle Haute; a relatively intimate dwelling spotted with round tables. On the east side of the room is a window and a door.",
+        Things = new()
+        {
+            [new Regex(@"table(s)?", RegexOptions.IgnoreCase)] = new Thing()
+            {
+                Name = "Tables",
+                Actions = new()
+                {
+                    [Regexes.Inspect()] = (Thing self, Thing activator) =>
+                    {
+                        Console.WriteLine("Upon one of the tabletops lies an ornate-looking rock enthusiastically pinning one of the napkins to the table. It's roughly the size of your head and thrice the weight.");
+                    },
+                },
+            },
+            [new Regex("rock", RegexOptions.IgnoreCase)] = new Thing()
+            {
+                Name = "Rock",
+                Actions = new()
+                {
+                    [Regexes.Inspect()] = (Thing self, Thing activator) =>
+                    {
+                        Console.WriteLine("It's a nice heavy rock. I bet it would be a lot of fun if you chucked it into something breakable.");
+                    },
+                    [Regexes.Take()] = (Thing self, Thing taker) =>
+                    {
+                    },
+                },
+            },
+        },
+    }
 };
 
+Stack<string> breadcrumbs = [];
 Scene currentScene = scenes["StartingRoom"];
 Thing player = new()
 {
@@ -83,7 +125,20 @@ while (true)
         continue;
     }
 
-    input = input.Trim();
+    input = input.Trim().ToLower();
+
+    if (Regexes.GoBack().IsMatch(input))
+    {
+        if (!breadcrumbs.TryPop(out string? linkId) || linkId is null)
+        {
+            Console.WriteLine("There is nowhere to go back to!");
+            continue;
+        }
+
+        currentScene = scenes[linkId];
+
+        continue;
+    }
 
     // go
 
@@ -91,51 +146,10 @@ while (true)
 
     if (matchAndGroups.Match.Success)
     {
-        if (matchAndGroups.Groups.Length < 3)
+        foreach (OrderedDictionary link in currentScene.Links)
         {
-            Console.WriteLine("Where should I go?");
-            continue;
+            Console.WriteLine(link);
         }
-
-        if (!currentScene.Links.TryGetValue(matchAndGroups.Groups[^1].Value, out string? linkString))
-        {
-            Console.WriteLine("I cannot go there.");
-            continue;
-        }
-
-        currentScene = scenes[linkString];
-
-        string text = currentScene.InitialText;
-
-        if (currentScene.WasVisited)
-        {
-            text = currentScene.Name;
-        }
-
-        Console.WriteLine(text);
-
-        continue;
-    }
-
-    // inspect
-
-    matchAndGroups = ProcessGroups(Regexes.Inspect().Match(input));
-
-    if (matchAndGroups.Match.Success)
-    {
-        if (matchAndGroups.Groups.Length < 2)
-        {
-            Console.WriteLine("What should I inspect?");
-            continue;
-        }
-
-        if (!currentScene.Things.TryGetValue(matchAndGroups.Groups[^1].Value, out Thing? thing))
-        {
-            Console.WriteLine($"I can't find such a thing in here.");
-            continue;
-        }
-
-        thing?.InteractWith?.Invoke(thing, player);
 
         continue;
     }
@@ -143,12 +157,9 @@ while (true)
     Console.WriteLine("Come again?");
 }
 
-static (Match Match, Group[] Groups) ProcessGroups(Match match)
+static (Match Match, string[] Groups) ProcessGroups(Match match)
 {
     Group[] groups = new Group[match.Groups.Count];
-
     match.Groups.CopyTo(groups, 0);
-    groups = groups.Where(g => !string.IsNullOrWhiteSpace(g.Value)).ToArray();
-
-    return (match, groups);
+    return (match, groups.Where(g => !string.IsNullOrWhiteSpace(g.Value)).Select(g => g.Value.Trim().ToLower()).ToArray());
 }
