@@ -45,6 +45,17 @@ Dictionary<string, Scene> scenes = new()
                     {
                         Console.WriteLine("The portcullis is shut. You try prying it open from the bottom, but it's no use. There is a key hole, however.");
                     },
+                    [new Regex(@"\bopen\s+(the)?", RegexOptions.IgnoreCase)] = (Thing.ActionArgs args) =>
+                    {
+                        if (args.Activator.State.TryGetValue("HasPortcullisKey", out object? o) && o is true)
+                        {
+                            Console.WriteLine("You escaped! Thanks for playing!");
+                            args.Activator.State["Done"] = true;
+                            return;
+                        }
+
+                        Console.WriteLine("The portcullis is shut. You try prying it open from the bottom, but it's no use. There is a key hole, however.");
+                    },
                 },
             },
             [new Regex(@"(?:wood(?:en)?\s+)?(cask(?:s)?)", RegexOptions.IgnoreCase)] = new Thing()
@@ -67,6 +78,13 @@ Dictionary<string, Scene> scenes = new()
                                 Console.WriteLine("You descend the flanks, prying open the caskets one-by-one with your crowbar. In one of them, you find a key.");
                                 return;
                             }
+                        }
+
+                        if (args.Activator.State.TryGetValue("HasCrowbar", out object? o) && o is true)
+                        {
+                            Console.WriteLine("You use the crowbar you acquired from the Salle Haute to pry open the casks one-by-one. In one you find the portcullis key!");
+                            args.Activator.State["HasPortcullisKey"] = true;
+                            return;
                         }
 
                         Console.WriteLine("You try opening the casks with your bare hands, but they appear to be shut.");
@@ -114,6 +132,18 @@ Dictionary<string, Scene> scenes = new()
                     {
                         Console.WriteLine("A heavily-tinted window. You can just make out a crowbar-looking shape in the room beyond it.");
                     },
+                    [new Regex(@"\b(go|jump)\s+through")] = (Thing.ActionArgs args) =>
+                    {
+                        if (args.Self.State.TryGetValue("Shattered", out object? o) && o is bool shattered)
+                        {
+                            Console.WriteLine("You quickly hop into the room behind what used to be the window. You grab the crowbar off a workbench and promptly come back out.");
+                            args.Activator.State["HasCrowbar"] = true;
+
+                            return;
+                        }
+
+                        Console.WriteLine("You feel apprehensive about barreling through the window. You hate cuts and scrapes!");
+                    },
                 },
             },
             [new Regex("rock", RegexOptions.IgnoreCase)] = new Thing()
@@ -128,36 +158,20 @@ Dictionary<string, Scene> scenes = new()
                         args.Self.IsHidden = false;
                         Console.WriteLine("It's a nice heavy rock. You bet it would be a lot of fun if you chucked it into something breakable.");
                     },
-                    [Regexes.Take()] = (Thing.ActionArgs args) =>
+                    [new Regex(@"\bthrow\s+(?:the\s+)?rock\s+(at)?\s+(?:the\s+)?(\w+)")] = (Thing.ActionArgs args) =>
                     {
-                        if (!args.Self.CanPickUp)
-                        {
-                            Console.WriteLine($"You cannot take the {args.Self.Name}.");
-                            return;
-                        }
+                        string victim = args.Command[^1];
 
-                        if (args.Activator.State.TryGetValue("Inventory", out object? o) && o is Dictionary<string, Thing> inventory)
+                        if (victim.Equals("window", StringComparison.CurrentCultureIgnoreCase))
                         {
-                            Console.WriteLine($"You took the {args.Self.Name}.");
-                            inventory[args.Self.Name] = args.Self;
-
-                            args.Self.Actions[new Regex(@"\bthrow\s+(?:the\s+)?rock\s+at\s+(?:the\s+)?(\w+)")] = (Thing.ActionArgs args) =>
+                            if (args.Self.Query is not null)
                             {
-                                string victim = args.Command[^1];
-
-                                if (victim.Equals("window", StringComparison.CurrentCultureIgnoreCase))
+                                if (args.Self.Query.TryGetValue("Window", out Thing? window) && window is not null)
                                 {
-                                    if (args.Self.Query is not null && args.Self.Query.TryGetValue("window", out Thing? window) && window is not null)
-                                    {
-                                        window.State["Shattered"] = true;
-                                        Console.WriteLine($"You threw the rock at the window, shattering it into countless, brilliant shards.");
-                                    }
-
-                                    return;
+                                    window.State["Shattered"] = true;
+                                    Console.WriteLine($"You threw the rock at the window, shattering it into countless, brilliant shards.");
                                 }
-
-                                Console.WriteLine("You can't or probably shouldn't throw your rock at that!");
-                            };
+                            }
 
                             return;
                         }
@@ -171,9 +185,17 @@ Dictionary<string, Scene> scenes = new()
 // ugh
 foreach (Scene scene in scenes.Values)
 {
-    foreach (Thing thing in scene.Things.Values)
+    Dictionary<string, Thing> q = [];
+
+    foreach (DictionaryEntry kvp in scene.Things)
     {
-        thing.Query = scene.Things;
+        Thing? thing = (Thing?)kvp.Value;
+
+        if (thing is not null)
+        {
+            q[thing.Name] = thing;
+            thing.Query = q;
+        }
     }
 }
 
@@ -188,7 +210,7 @@ player.State["Inventory"] = new Dictionary<string, Thing>();
 GoInto(scenes["StartingRoom"]);
 breadcrumbs.Pop();
 
-while (true)
+while (!(player.State.TryGetValue("Done", out object? o) && o is true))
 {
     Console.Write("> ");
 

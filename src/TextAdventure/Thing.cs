@@ -16,5 +16,5 @@ public sealed record class Thing
     public bool CanPickUp = false;
     public Dictionary<string, object?> State = [];
     public OrderedDictionary Actions = [];
-    public OrderedDictionary? Query = null;
+    public Dictionary<string, Thing>? Query = null;
 }
