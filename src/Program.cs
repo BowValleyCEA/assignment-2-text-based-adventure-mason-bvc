@@ -25,12 +25,23 @@ Dictionary<string, Scene> scenes = new()
         },
         Things = new()
         {
+            [new Regex(@"key\s+hole", RegexOptions.IgnoreCase)] = new Thing()
+            {
+                Name = "Key Hole",
+                Actions = new()
+                {
+                    [Regexes.Inspect()] = (Thing _, Thing _) =>
+                    {
+                        Console.WriteLine("The portcullis' key hole. Now if you could just find the key...");
+                    },
+                }
+            },
             [new Regex("portcullis", RegexOptions.IgnoreCase)] = new Thing()
             {
                 Name = "Portcullis",
                 Actions = new()
                 {
-                    [Regexes.Inspect()] = (Thing _, Thing _) =>
+                    [Regexes.Inspect()] = (Thing.ActionArgs _) =>
                     {
                         Console.WriteLine("The portcullis is shut. You try prying it open from the bottom, but it's no use. There is a key hole, however.");
                     },
@@ -45,16 +56,18 @@ Dictionary<string, Scene> scenes = new()
                 },
                 Actions = new()
                 {
-                    [Regexes.Inspect()] = (Thing self, Thing activator) =>
+                    [Regexes.Inspect()] = (Thing.ActionArgs args) =>
                     {
                         // needed to start a new scope because i repeatedly use the
                         // identifier "value" for out args
 
-                        {if (activator.State.TryGetValue("Inventory", out object? value) && value is Dictionary<string, Thing> inventory && inventory.TryGetValue("Crowbar", out Thing? crowbar))
                         {
-                            Console.WriteLine("You descend the flanks, prying open the caskets one-by-one with your crowbar. In one of them, you find a key.");
-                            return;
-                        }}
+                            if (args.Activator.State.TryGetValue("Inventory", out object? value) && value is Dictionary<string, Thing> inventory && inventory.ContainsKey("Crowbar"))
+                            {
+                                Console.WriteLine("You descend the flanks, prying open the caskets one-by-one with your crowbar. In one of them, you find a key.");
+                                return;
+                            }
+                        }
 
                         Console.WriteLine("You try opening the casks with your bare hands, but they appear to be shut.");
                     },
@@ -77,34 +90,92 @@ Dictionary<string, Scene> scenes = new()
         InitialText = "You now stand in the Salle Haute; a relatively intimate dwelling spotted with round tables. On the east side of the room is a window and a door.",
         Things = new()
         {
-            [new Regex(@"table(s)?", RegexOptions.IgnoreCase)] = new Thing()
+            [new Regex(@"table((\s+)?top)?(s)?", RegexOptions.IgnoreCase)] = new Thing()
             {
                 Name = "Tables",
                 Actions = new()
                 {
-                    [Regexes.Inspect()] = (Thing self, Thing activator) =>
+                    [Regexes.Inspect()] = (Thing.ActionArgs _) =>
                     {
                         Console.WriteLine("Upon one of the tabletops lies an ornate-looking rock enthusiastically pinning one of the napkins to the table. It's roughly the size of your head and thrice the weight.");
+                    },
+                },
+            },
+            [new Regex("window", RegexOptions.IgnoreCase)] = new Thing()
+            {
+                Name = "Window",
+                State = new()
+                {
+                    ["Shattered"] = false,
+                },
+                Actions = new()
+                {
+                    [Regexes.Inspect()] = (Thing.ActionArgs args) =>
+                    {
+                        Console.WriteLine("A heavily-tinted window. You can just make out a crowbar-looking shape in the room beyond it.");
                     },
                 },
             },
             [new Regex("rock", RegexOptions.IgnoreCase)] = new Thing()
             {
                 Name = "Rock",
+                IsHidden = true,
+                CanPickUp = true,
                 Actions = new()
                 {
-                    [Regexes.Inspect()] = (Thing self, Thing activator) =>
+                    [Regexes.Inspect()] = (Thing.ActionArgs args) =>
                     {
-                        Console.WriteLine("It's a nice heavy rock. I bet it would be a lot of fun if you chucked it into something breakable.");
+                        args.Self.IsHidden = false;
+                        Console.WriteLine("It's a nice heavy rock. You bet it would be a lot of fun if you chucked it into something breakable.");
                     },
-                    [Regexes.Take()] = (Thing self, Thing taker) =>
+                    [Regexes.Take()] = (Thing.ActionArgs args) =>
                     {
+                        if (!args.Self.CanPickUp)
+                        {
+                            Console.WriteLine($"You cannot take the {args.Self.Name}.");
+                            return;
+                        }
+
+                        if (args.Activator.State.TryGetValue("Inventory", out object? o) && o is Dictionary<string, Thing> inventory)
+                        {
+                            Console.WriteLine($"You took the {args.Self.Name}.");
+                            inventory[args.Self.Name] = args.Self;
+
+                            args.Self.Actions[new Regex(@"\bthrow\s+(?:the\s+)?rock\s+at\s+(?:the\s+)?(\w+)")] = (Thing.ActionArgs args) =>
+                            {
+                                string victim = args.Command[^1];
+
+                                if (victim.Equals("window", StringComparison.CurrentCultureIgnoreCase))
+                                {
+                                    if (args.Self.Query is not null && args.Self.Query.TryGetValue("window", out Thing? window) && window is not null)
+                                    {
+                                        window.State["Shattered"] = true;
+                                        Console.WriteLine($"You threw the rock at the window, shattering it into countless, brilliant shards.");
+                                    }
+
+                                    return;
+                                }
+
+                                Console.WriteLine("You can't or probably shouldn't throw your rock at that!");
+                            };
+
+                            return;
+                        }
                     },
                 },
             },
         },
     }
 };
+
+// ugh
+foreach (Scene scene in scenes.Values)
+{
+    foreach (Thing thing in scene.Things.Values)
+    {
+        thing.Query = scene.Things;
+    }
+}
 
 Stack<Scene> breadcrumbs = [];
 Scene currentScene = scenes["StartingRoom"];
@@ -113,6 +184,7 @@ Thing player = new()
     Name = "Player",
 };
 
+player.State["Inventory"] = new Dictionary<string, Thing>();
 GoInto(scenes["StartingRoom"]);
 breadcrumbs.Pop();
 
@@ -139,7 +211,7 @@ while (true)
             continue;
         }
 
-        GoInto(targetScene);
+        GoInto(targetScene, false);
 
         continue;
     }
@@ -152,7 +224,7 @@ while (true)
     {
         if (matchAndGroups.Groups.Length < 3)
         {
-            Console.WriteLine("Where should I go?");
+            Console.WriteLine("Where should you go?");
             continue;
         }
 
@@ -167,6 +239,7 @@ while (true)
             {
                 GoInto(targetScene);
                 success = true;
+
                 break;
             }
         }
@@ -176,16 +249,107 @@ while (true)
             continue;
         }
 
-        Console.WriteLine($"\"{matchAndGroups.Groups[^1]}\" is not a place I can go into.");
+        Console.WriteLine($"\"{matchAndGroups.Groups[^1]}\" is not a place you can go to.");
+
+        continue;
+    }
+
+    // where
+
+    matchAndGroups = ProcessGroups(Regexes.Where().Match(input));
+
+    if (matchAndGroups.Match.Success)
+    {
+        Console.WriteLine(currentScene.InitialText);
+        continue;
+    }
+
+    // what
+
+    matchAndGroups = ProcessGroups(Regexes.What().Match(input));
+
+    if (matchAndGroups.Match.Success)
+    {
+        if (currentScene.Things.Count <= 0)
+        {
+            Console.WriteLine("There's nothing of note here.");
+            continue;
+        }
+
+        Console.WriteLine("What you can immediately notice in this room:");
+
+        foreach (DictionaryEntry kvp in currentScene.Things)
+        {
+            Thing? t = (Thing?)kvp.Value;
+
+            if (t is not null && !t.IsHidden)
+            {
+                Console.WriteLine($"    {t.Name}");
+            }
+        }
+
+        continue;
+    }
+
+    // other actions
+
+    MatchCollection splits = new Regex(@"(\w+)").Matches(input);
+    Match? thingMatch = splits[^1];
+    Thing? thing = null;
+
+    foreach (DictionaryEntry kvp in currentScene.Things)
+    {
+        Regex re = (Regex)kvp.Key;
+
+        if (re.IsMatch(input))
+        {
+            thing = (Thing?)kvp.Value;
+        }
+    }
+
+    if (thing is not null)
+    {
+        Action<Thing.ActionArgs>? action = null;
+
+        foreach (DictionaryEntry kvp in thing.Actions)
+        {
+            Regex re = (Regex)kvp.Key;
+
+            if (re.IsMatch(input))
+            {
+                action = (Action<Thing.ActionArgs>?)kvp.Value;
+                break;
+            }
+        }
+
+        if (action is not null)
+        {
+            var actionArgs = new Thing.ActionArgs
+            {
+                Self = thing,
+                Activator = player,
+                Command = ProcessGroups(thingMatch).Groups,
+            };
+
+            action.Invoke(actionArgs);
+            continue;
+        }
+
+        Console.WriteLine($"You cannot \"{splits[0].Value}\" the {thing.Name}.");
+
         continue;
     }
 
     Console.WriteLine("Come again?");
 }
 
-void GoInto(Scene targetScene)
+void GoInto(Scene targetScene, bool shouldPushIntoBreadcrumbs = true)
 {
-    breadcrumbs.Push(currentScene);
+    if (shouldPushIntoBreadcrumbs)
+    {
+        breadcrumbs.Push(currentScene);
+    }
+
     currentScene = targetScene;
 
     string text = currentScene.InitialText;
